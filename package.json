@@ -2,12 +2,17 @@
   "name": "flow-crm-backend",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
-  "dependencies": {
-    "express": "^4.18.2",
-    "axios": "^1.6.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "cors": "^2.8.5"
+  "scripts": {
+    "start": "node index.js"
   },
-  "engines": { "node": ">=18.0.0" }
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^13.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
