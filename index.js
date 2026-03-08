@@ -9,9 +9,7 @@ app.use(express.json());
 app.use(cors());
 
 // ── Firebase ───────────────────────────────────────────────────────
-const serviceAccount = process.env.GOOGLE_CREDENTIALS_JSON
-  ? JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
-  : require("./google-credentials.json");
+const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
