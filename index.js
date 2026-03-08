@@ -3,6 +3,11 @@ const axios = require("axios");
 const cors = require("cors");
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+console.log("=== TWILIO DEBUG ===");
+console.log("SID:", process.env.TWILIO_ACCOUNT_SID?.slice(0, 8));
+console.log("TOKEN:", process.env.TWILIO_AUTH_TOKEN?.slice(0, 8));
+console.log("NUMBER:", process.env.TWILIO_WHATSAPP_NUMBER);
+console.log("===================");
 
 const app = express();
 app.use(express.json());
