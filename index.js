@@ -14,7 +14,10 @@ app.use(express.json());
 app.use(cors());
 
 // ── Firebase ───────────────────────────────────────────────────────
-const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS.replace(/\\n/g, '\n'));
+// ✅ Seguro
+const serviceAccount = process.env.FIREBASE_CREDENTIALS
+  ? JSON.parse(process.env.FIREBASE_CREDENTIALS.replace(/\\n/g, '\n'))
+  : require('./firebase-credentials.json');
 
 
 initializeApp({ credential: cert(serviceAccount) });
@@ -28,7 +31,7 @@ const TWILIO_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER; // ej: whatsapp:+17025
 const sendWhatsApp = async (to, message) => {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
   const params = new URLSearchParams({
-    From: TWILIO_NUMBER,
+    From: TWILIO_NUMBER.startsWith('whatsapp:') ? TWILIO_NUMBER : `whatsapp:${TWILIO_NUMBER}`,
     To: `whatsapp:+${to.replace(/\D/g, "")}`,
     Body: message,
   });
