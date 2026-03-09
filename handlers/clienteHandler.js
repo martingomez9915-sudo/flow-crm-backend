@@ -218,6 +218,18 @@ async function handleCliente(fromRaw, body) {
     return await consultarSeguimiento(texto.toUpperCase(), fromNumber, enviar);
   }
 
+  // ── Detección directa de tienda por nombre ──────────────────────
+  // Si el cliente escribe el nombre de una tienda (ej: "naked"),
+  // va directo al catálogo sin importar en qué estado esté
+  if ([ESTADOS.INICIO, ESTADOS.ESPERANDO_CIUDAD, ESTADOS.ESPERANDO_PRODUCTO_CIUDAD].includes(sesion.estado)) {
+    try {
+      const todasLasTiendas = await db.listarTodasLasTiendas();
+      const normalizar = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const tiendaDirecta = todasLasTiendas.find(t => normalizar(t.nombre).includes(normalizar(texto)));
+      if (tiendaDirecta) return await mostrarCatalogoTiendaDirecta(tiendaDirecta, fromNumber, fromRaw, enviar);
+    } catch (e) { console.warn('⚠️ No se pudo verificar tienda directa:', e.message); }
+  }
+
   switch (sesion.estado) {
     case ESTADOS.INICIO:
     case ESTADOS.ESPERANDO_CIUDAD:
@@ -234,7 +246,7 @@ async function handleCliente(fromRaw, body) {
       return await manejarNombre(body.trim(), fromNumber, enviar);
     case ESTADOS.ESPERANDO_CANTIDAD:
       return await manejarCantidad(texto, fromNumber, enviar);
-    case ESTADOS.CONFIRMANDO_PEDIDO:
+    case ESTADOS.CONFIRMANDO_PEDIDO
       return await manejarConfirmacion(texto, fromNumber, enviar);
     case ESTADOS.CONFIRMANDO_CARRITO:
       return await manejarConfirmacionCarrito(texto, fromNumber, enviar);
@@ -485,6 +497,47 @@ async function manejarTienda(texto, fromNumber, enviar) {
   }
 
   return await mostrarProductosDeTienda(tiendasFiltradas[idx], fromNumber, enviar);
+}
+
+async function mostrarCatalogoTiendaDirecta(tiendaElegida, fromNumber, fromRaw, enviar) {
+  setSesion(fromNumber, { tiendaSeleccionada: tiendaElegida, fromRaw });
+  // ── Catálogo Naked ──
+  if (tiendaElegida.nombre && tiendaElegida.nombre.toLowerCase().includes('naked')) {
+    const urlNaked = `${process.env.RAILWAY_URL || 'https://flow-ai-production-4dc2.up.railway.app'}/catalogo_naked_flow_v2.pdf`;
+    await whatsapp.enviarMensaje(process.env.TWILIO_WHATSAPP_NUMBER, fromRaw, ' ', urlNaked);
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  const productos = await db.obtenerInventarioTienda(tiendaElegida.phoneId);
+  if (!productos || productos.length === 0)
+    return await enviar(`😔 *${tiendaElegida.nombre}* no tiene productos disponibles.\n\n0️⃣ Volver al menú`);
+
+  const productosDisponibles = productos.filter(p => (p.stock || 0) > 0);
+  if (productosDisponibles.length === 0)
+    return await enviar(`😔 *${tiendaElegida.nombre}* está sin stock por ahora.\n\n0️⃣ Volver al menú`);
+
+  setSesion(fromNumber, { estado: ESTADOS.VIENDO_PRODUCTOS, productosDisponibles });
+
+  const NGROK = process.env.RAILWAY_URL || 'https://flow-ai-production-4dc2.up.railway.app';
+
+  try {
+    const nombrePDF = await generarCatalogoPDF(tiendaElegida, productosDisponibles);
+    const urlPDF = `${NGROK}/catalogos/${nombrePDF}`;
+    await whatsapp.enviarMensaje(process.env.TWILIO_WHATSAPP_NUMBER, fromRaw, ' ', urlPDF);
+    await new Promise(r => setTimeout(r, 600));
+  } catch (e) {
+    console.warn('⚠️ No se pudo generar PDF:', e.message);
+  }
+
+  await enviar(
+    `🛍️ *${tiendaElegida.nombre}*\n\n` +
+    `📄 Te envié el catálogo completo arriba ↑\n\n` +
+    `*¿Qué deseas pedir?*\n` +
+    `Escribe los números separados por coma:\n\n` +
+    `_Ej: *1,3* → uno de cada uno_\n` +
+    `_Ej: *1x2,3x1* → producto x cantidad_\n\n` +
+    `0️⃣ Volver al menú`
+  );
 }
 
 async function mostrarProductosDeTienda(tiendaElegida, fromNumber, enviar) {
