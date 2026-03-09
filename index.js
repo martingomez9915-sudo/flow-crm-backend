@@ -340,4 +340,16 @@ app.get("/admin/negocios", async (req, res) => {
 //  INICIO DEL SERVIDOR
 // ══════════════════════════════════════════════════════════════════
 
+// Toggle activo/inactivo de negocio
+app.post("/admin/negocios/:id/toggle", async (req, res) => {
+  const phoneWithCode = req.headers.authorization?.replace("Bearer ", "");
+  const adminDoc = await db.collection("negocios").doc(phoneWithCode).get();
+  if (!adminDoc.exists || adminDoc.data().tipo_usuario !== "SUPER_ADMIN") {
+    return res.status(403).json({ error: "No autorizado" });
+  }
+  const { activo } = req.body;
+  await db.collection("negocios").doc(req.params.id).update({ activo });
+  res.json({ success: true });
+});
+
 app.listen(process.env.PORT || 3000, () => console.log("🚀 Flow CRM corriendo en puerto " + (process.env.PORT || 3000)));
