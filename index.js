@@ -14,10 +14,12 @@ app.use(express.json());
 app.use(cors());
 
 // ── Firebase ───────────────────────────────────────────────────────
-// ✅ Seguro
- const serviceAccount = process.env.FIREBASE_CREDENTIALS
-? JSON.parse(process.env.FIREBASE_CREDENTIALS.replace(/\\n/g, '\n'))
-  : require('./firebase-credentials.json');
+const raw = process.env.FIREBASE_CREDENTIALS;
+const serviceAccount = JSON.parse(
+  raw.replace(/("private_key"\s*:\s*")([\s\S]*?)(")/g, (_, open, key, close) =>
+    open + key.replace(/\n/g, '\\n') + close
+  )
+);
 
 
 initializeApp({ credential: cert(serviceAccount) });
