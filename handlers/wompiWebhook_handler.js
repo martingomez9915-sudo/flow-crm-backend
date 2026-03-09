@@ -14,15 +14,15 @@
  *  7. Actualizar estado en Firestore → PAGADO
  */
 
-const express    = require('express');
-const router     = express.Router();
+const express = require('express');
+const router = express.Router();
 const { Firestore } = require('@google-cloud/firestore');
-const wompi      = require('../services/wompiService');
-const whatsapp   = require('../services/whatsapp');
+const wompi = require('../services/wompiService');
+const whatsapp = require('../services/whatsapp');
 const { notificarPedido } = require('../services/emailService');
 const { registrarVentaEnSheet } = require('../services/sheetsService');
 
-const db   = new Firestore({ projectId: process.env.GCLOUD_PROJECT || 'melodic-park-489419-k5' });
+const db = new Firestore({ projectId: process.env.GCLOUD_PROJECT || 'melodic-park-489419-k5' });
 const FROM = process.env.TWILIO_WHATSAPP_NUMBER;
 
 // ══════════════════════════════════════════════════════════
@@ -33,7 +33,7 @@ router.post('/webhook', async (req, res) => {
 
   try {
     const evento = req.body;
-    const firma  = req.headers['x-event-checksum'] || '';
+    const firma = req.headers['x-event-checksum'] || '';
 
     console.log(`\n🔔 [WOMPI] Evento: ${evento?.event}`);
 
@@ -60,9 +60,9 @@ router.post('/webhook', async (req, res) => {
 //  PAGO APROBADO
 // ══════════════════════════════════════════════════════════
 async function manejarPagoAprobado(tx) {
-  const codigo   = tx.reference;
+  const codigo = tx.reference;
   const totalCOP = tx.amount_in_cents / 100;
-  const metodo   = tx.payment_method_type;
+  const metodo = tx.payment_method_type;
 
   const pedidoRef = db.collection('pedidos').doc(codigo);
   const pedidoDoc = await pedidoRef.get();
@@ -83,11 +83,11 @@ async function manejarPagoAprobado(tx) {
 
   // Actualizar Firestore
   await pedidoRef.set({
-    wompi_estado     : 'APROBADO',
-    wompi_tx_id      : tx.id,
+    wompi_estado: 'APROBADO',
+    wompi_tx_id: tx.id,
     wompi_metodo_pago: metodo,
-    wompi_pagado_en  : new Date().toISOString(),
-    estado           : 'PAGADO',
+    wompi_pagado_en: new Date().toISOString(),
+    estado: 'PAGADO',
   }, { merge: true });
 
   // Split
@@ -116,11 +116,11 @@ async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowC
   // Google Sheets
   await registrarVentaEnSheet({
     codigo,
-    clienteNombre : pedido.clienteNombre,
-    clienteNumero : pedido.clienteNumero,
-    tiendaNombre  : pedido.tiendaNombre,
-    productos     : [{ nombre: pedido.producto, cantidad: pedido.cantidad, precio: totalCOP }],
-    total         : totalCOP,
+    clienteNombre: pedido.clienteNombre,
+    clienteNumero: pedido.clienteNumero,
+    tiendaNombre: pedido.tiendaNombre,
+    productos: [{ nombre: pedido.producto, cantidad: pedido.cantidad, precio: totalCOP }],
+    total: totalCOP,
   }).catch(err => console.warn('⚠️ Sheets:', err.message));
 
   // WhatsApp → Cliente
@@ -160,15 +160,42 @@ async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowC
 
   // Email → Tienda
   await notificarPedido({
-    emailTienda  : pedido.emailTienda,
-    tiendaNombre : pedido.tiendaNombre,
+    emailTienda: pedido.emailTienda,
+    tiendaNombre: pedido.tiendaNombre,
     codigo,
     clienteNombre: pedido.clienteNombre,
     clienteNumero: pedido.clienteNumero,
-    producto     : pedido.producto,
-    cantidad     : pedido.cantidad,
-    total        : totalCOP,
+    producto: pedido.producto,
+    cantidad: pedido.cantidad,
+    total: totalCOP,
   }).catch(err => console.warn('⚠️ Email:', err.message));
+
+  // ✅ SYNC → CRM tienda (dashboard ventas/pedidos)
+  const fechaISO = new Date().toISOString();
+  await db.collection('negocios').doc(String(pedido.tiendaId))
+    .collection('transacciones').doc(codigo)
+    .set({
+      tipo: 'VENTA',
+      codigo,
+      total: totalCOP,
+      producto: pedido.producto,
+      cantidad: pedido.cantidad,
+      cliente: pedido.clienteNombre,           // campo que lee /orders
+      clienteNumero: String(pedido.clienteNumero),
+      metodoPago: metodo,
+      fecha: fechaISO,                       // ISO string que compara /stats
+      estado: 'CONFIRMADO',
+    });
+
+  // ✅ SYNC → estadisticas (dashboard admin)
+  await db.collection('negocios').doc(String(pedido.tiendaId)).set({
+    estadisticas: {
+      total_ventas: Firestore.FieldValue.increment(totalCOP),
+      clientes_total: Firestore.FieldValue.increment(1),
+    }
+  }, { merge: true });
+
+  console.log(`📊 [CRM] Venta registrada para tienda ${pedido.tiendaId}`);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -177,7 +204,7 @@ async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowC
 // ══════════════════════════════════════════════════════════
 async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) {
   const metodoPago = formatMetodoPago(metodo);
-  const tiendas    = pedido.tiendas;
+  const tiendas = pedido.tiendas;
 
   // Armar mensaje resumen para el cliente
   let msgCliente =
@@ -187,9 +214,9 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
 
   for (const tienda of tiendas) {
     // Código único por tienda: FLOW-XXXX-TIENDA
-    const codigoTienda  = `${codigoBase}-${tienda.tiendaId.slice(-4).toUpperCase()}`;
-    const subtotal      = tienda.subtotal || 0;
-    const comision      = Math.round(subtotal * (wompi.COMISION_PCT / 100));
+    const codigoTienda = `${codigoBase}-${tienda.tiendaId.slice(-4).toUpperCase()}`;
+    const subtotal = tienda.subtotal || 0;
+    const comision = Math.round(subtotal * (wompi.COMISION_PCT / 100));
     const ingresoTienda = subtotal - comision;
 
     // Guardar sub-pedido en Firestore
@@ -197,7 +224,7 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
       .collection('tiendas').doc(tienda.tiendaId)
       .set({
         codigoTienda,
-        estado      : 'PAGADO',
+        estado: 'PAGADO',
         subtotal,
         comision,
         ingresoTienda,
@@ -206,12 +233,12 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
 
     // Google Sheets Global
     await registrarVentaEnSheet({
-      codigo        : codigoTienda,
-      clienteNombre : pedido.clienteNombre,
-      clienteNumero : pedido.clienteNumero,
-      tiendaNombre  : tienda.tiendaNombre,
-      productos     : tienda.productos,
-      total         : subtotal,
+      codigo: codigoTienda,
+      clienteNombre: pedido.clienteNombre,
+      clienteNumero: pedido.clienteNumero,
+      tiendaNombre: tienda.tiendaNombre,
+      productos: tienda.productos,
+      total: subtotal,
     }).catch(err => console.warn(`⚠️ Sheets [${tienda.tiendaNombre}]:`, err.message));
 
     // Añadir al resumen del cliente
@@ -245,15 +272,41 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
 
     // Email → cada Tienda
     await notificarPedido({
-      emailTienda  : tienda.emailTienda,
-      tiendaNombre : tienda.tiendaNombre,
-      codigo       : codigoTienda,
+      emailTienda: tienda.emailTienda,
+      tiendaNombre: tienda.tiendaNombre,
+      codigo: codigoTienda,
       clienteNombre: pedido.clienteNombre,
       clienteNumero: pedido.clienteNumero,
-      producto     : tienda.productos.map(p => p.nombre).join(', '),
-      cantidad     : tienda.productos.reduce((a, p) => a + p.cantidad, 0),
-      total        : subtotal,
+      producto: tienda.productos.map(p => p.nombre).join(', '),
+      cantidad: tienda.productos.reduce((a, p) => a + p.cantidad, 0),
+      total: subtotal,
     }).catch(err => console.warn(`⚠️ Email [${tienda.tiendaNombre}]:`, err.message));
+
+    // ✅ SYNC → CRM tienda (dashboard ventas/pedidos)
+    const fechaISO = new Date().toISOString();
+    await db.collection('negocios').doc(String(tienda.tiendaId))
+      .collection('transacciones').doc(codigoTienda)
+      .set({
+        tipo: 'VENTA',
+        codigo: codigoTienda,
+        total: subtotal,
+        productos: tienda.productos,
+        cliente: pedido.clienteNombre,         // campo que lee /orders
+        clienteNumero: String(pedido.clienteNumero),
+        metodoPago: metodo,
+        fecha: fechaISO,                     // ISO string que compara /stats
+        estado: 'CONFIRMADO',
+      });
+
+    // ✅ SYNC → estadisticas (dashboard admin)
+    await db.collection('negocios').doc(String(tienda.tiendaId)).set({
+      estadisticas: {
+        total_ventas: Firestore.FieldValue.increment(subtotal),
+        clientes_total: Firestore.FieldValue.increment(1),
+      }
+    }, { merge: true });
+
+    console.log(`📊 [CRM] Venta registrada para tienda ${tienda.tiendaId}`);
   }
 
   // Cerrar mensaje cliente y enviar
@@ -280,8 +333,8 @@ async function manejarPagoFallido(tx) {
 
   await db.collection('pedidos').doc(codigo).set({
     wompi_estado: tx.status,
-    wompi_tx_id : tx.id,
-    estado      : 'PAGO_FALLIDO',
+    wompi_tx_id: tx.id,
+    estado: 'PAGO_FALLIDO',
   }, { merge: true });
 
   await whatsapp.enviarMensaje(FROM, formatWa(pedido.clienteNumero),
@@ -301,13 +354,13 @@ function formatWa(numero) {
 
 function formatMetodoPago(tipo) {
   const map = {
-    'CARD'                 : '💳 Tarjeta',
-    'NEQUI'                : '📱 Nequi',
-    'PSE'                  : '🏦 PSE',
-    'BANCOLOMBIA_TRANSFER' : '🏦 Bancolombia',
-    'BANCOLOMBIA_COLLECT'  : '📲 Bancolombia App',
-    'DAVIPLATA'            : '📱 Daviplata',
-    'EFECTY'               : '💵 Efecty',
+    'CARD': '💳 Tarjeta',
+    'NEQUI': '📱 Nequi',
+    'PSE': '🏦 PSE',
+    'BANCOLOMBIA_TRANSFER': '🏦 Bancolombia',
+    'BANCOLOMBIA_COLLECT': '📲 Bancolombia App',
+    'DAVIPLATA': '📱 Daviplata',
+    'EFECTY': '💵 Efecty',
   };
   return map[tipo] || tipo || 'Otro';
 }
