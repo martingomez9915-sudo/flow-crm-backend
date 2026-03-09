@@ -686,17 +686,33 @@ async function manejarOnboarding(negocio, mensaje, businessId, from) {
         return await wa.enviarMensaje(businessId, from, "Entendido. ¿Me podrías decir cuál es tu industria entonces? (Ej: _Artesanías_)");
       }
     }
-    await db.actualizarNegocio(from, { industria, onboarding_paso: 'confirmar_datos' });
+    await db.actualizarNegocio(from, { industria, onboarding_paso: 'email' });
+    return await wa.enviarMensaje(businessId, from,
+      `✅ Industria registrada.\n\n📧 *¿Cuál es el email de tu tienda?*\n\n_(Ej: ventas@minegocio.com)_\n\n_Escribe *SALTAR* si no tienes uno._`
+    );
+  }
+  if (paso === 'email') {
+    const email = cmd === 'SALTAR' ? '' : mensaje.trim().toLowerCase();
+    await db.actualizarNegocio(from, { email, onboarding_paso: 'web' });
+    return await wa.enviarMensaje(businessId, from,
+      `✅ Email registrado.\n\n🌐 *¿Tienes sitio web o Instagram?*\n\n_(Ej: https://minegocio.com o @minegocio)_\n\n_Escribe *SALTAR* si no tienes._`
+    );
+  }
+
+  if (paso === 'web') {
+    const web = cmd === 'SALTAR' ? '' : mensaje.trim();
+    await db.actualizarNegocio(from, { web, onboarding_paso: 'confirmar_datos' });
     return await wa.enviarMensaje(businessId, from,
       `📝 *RESUMEN DE TU PERFIL:*\n\n` +
       `🏢 *Negocio:* ${negocio.nombre || 'No definido'}\n` +
       `👤 *Dueño:* ${negocio.propietario || 'No definido'}\n` +
       `🆔 *ID/NIT:* ${negocio.identificacion || 'No definido'}\n` +
-      `📦 *Industria:* ${industria}\n\n` +
+      `📦 *Industria:* ${negocio.industria || 'No definido'}\n` +
+      `📧 *Email:* ${negocio.email || 'No definido'}\n` +
+      `🌐 *Web:* ${web || 'No definido'}\n\n` +
       `¿Es correcta esta información?\n✅ Escribe *SÍ* para finalizar.\n❌ Escribe *REINICIAR* si quieres cambiar algo.`
     );
   }
-
   if (paso === 'confirmar_datos') {
     if (cmd === 'SÍ' || cmd === 'SI' || cmd === 'S') {
       // Ir al paso de aceptación de comisión (siempre la primera vez)
@@ -742,6 +758,7 @@ async function manejarOnboarding(negocio, mensaje, businessId, from) {
       const ahora = new Date();
       await db.actualizarNegocio(from, {
         onboarding_completo: true,
+        phoneId: from,
         comision_aceptada: true,
         comision_aceptada_en: ahora.toISOString(),
         en_periodo_prueba: false,
@@ -765,6 +782,7 @@ async function manejarOnboarding(negocio, mensaje, businessId, from) {
       finPrueba.setDate(ahora.getDate() + 7);
       await db.actualizarNegocio(from, {
         onboarding_completo: true,
+        phoneId: from,
         comision_aceptada: false,
         en_periodo_prueba: true,
         prueba_inicio: ahora.toISOString(),
