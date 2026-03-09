@@ -221,7 +221,7 @@ async function handleCliente(fromRaw, body) {
   // ── Detección directa de tienda por nombre ──────────────────────
   // Si el cliente escribe el nombre de una tienda (ej: "naked"),
   // va directo al catálogo sin importar en qué estado esté
-  if ([ESTADOS.INICIO, ESTADOS.ESPERANDO_CIUDAD, ESTADOS.ESPERANDO_PRODUCTO_CIUDAD].includes(sesion.estado)) {
+  if (texto.length >= 3) {
     try {
       const todasLasTiendas = await db.listarTodasLasTiendas();
       const normalizar = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -246,7 +246,7 @@ async function handleCliente(fromRaw, body) {
       return await manejarNombre(body.trim(), fromNumber, enviar);
     case ESTADOS.ESPERANDO_CANTIDAD:
       return await manejarCantidad(texto, fromNumber, enviar);
-    case ESTADOS.CONFIRMANDO_PEDIDO
+    case ESTADOS.CONFIRMANDO_PEDIDO:
       return await manejarConfirmacion(texto, fromNumber, enviar);
     case ESTADOS.CONFIRMANDO_CARRITO:
       return await manejarConfirmacionCarrito(texto, fromNumber, enviar);
