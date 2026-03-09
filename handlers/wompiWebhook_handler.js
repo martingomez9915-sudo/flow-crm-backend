@@ -22,7 +22,7 @@ const whatsapp   = require('../services/whatsapp');
 const { notificarPedido } = require('../services/emailService');
 const { registrarVentaEnSheet } = require('../services/sheetsService');
 
-const db   = new Firestore({ projectId: process.env.GCLOUD_PROJECT || 'flow-489116' });
+const db   = new Firestore({ projectId: process.env.GCLOUD_PROJECT || 'melodic-park-489419-k5' });
 const FROM = process.env.TWILIO_WHATSAPP_NUMBER;
 
 // ══════════════════════════════════════════════════════════
@@ -79,7 +79,7 @@ async function manejarPagoAprobado(tx) {
     return;
   }
 
-  console.log(`✅ [WOMPI] Aprobado: ${codigo} | ${formatCOP(totalCOP)}`);
+  console.log(`✅ [WOMPI] Aprobado: ${codigo} | $${totalCOP.toLocaleString('es-CO')}`);
 
   // Actualizar Firestore
   await pedidoRef.set({
@@ -113,15 +113,13 @@ async function manejarPagoAprobado(tx) {
 async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowComision, metodo) {
   const metodoPago = formatMetodoPago(metodo);
 
-  const precioUnitario = pedido.cantidad > 0 ? totalCOP / pedido.cantidad : totalCOP;
-
   // Google Sheets
   await registrarVentaEnSheet({
     codigo,
     clienteNombre : pedido.clienteNombre,
     clienteNumero : pedido.clienteNumero,
     tiendaNombre  : pedido.tiendaNombre,
-    productos     : [{ nombre: pedido.producto, cantidad: pedido.cantidad, precio: precioUnitario }],
+    productos     : [{ nombre: pedido.producto, cantidad: pedido.cantidad, precio: totalCOP }],
     total         : totalCOP,
   }).catch(err => console.warn('⚠️ Sheets:', err.message));
 
@@ -136,7 +134,7 @@ async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowC
     `🏪 Tienda: ${pedido.tiendaNombre}\n` +
     `🛍️ ${pedido.producto} x${pedido.cantidad}\n` +
     `💳 Método: ${metodoPago}\n` +
-    `💵 *Total: ${formatCOP(totalCOP)}*\n` +
+    `💵 *Total: $${totalCOP.toLocaleString('es-CO')}*\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `📦 La tienda fue notificada.\n` +
     `Escribe *seguimiento ${codigo}* para rastrear. 🌊`
@@ -153,9 +151,9 @@ async function procesarPedidoSimple(pedido, codigo, totalCOP, tiendaMonto, flowC
     `🛍️ *${pedido.producto}* x${pedido.cantidad}\n` +
     `💳 Pago vía: ${metodoPago}\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `💵 Total:          ${formatCOP(totalCOP)}\n` +
-    `   ├─ Flow (${wompi.COMISION_PCT}%): -${formatCOP(flowComision)}\n` +
-    `   └─ *Tu ingreso: ${formatCOP(tiendaMonto)}*\n` +
+    `💵 Total:          $${totalCOP.toLocaleString('es-CO')}\n` +
+    `   ├─ Flow (${wompi.COMISION_PCT}%): -$${flowComision.toLocaleString('es-CO')}\n` +
+    `   └─ *Tu ingreso: $${tiendaMonto.toLocaleString('es-CO')}*\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `⚡ Prepara y despacha el pedido. 🌊`
   );
@@ -222,11 +220,11 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
       `🏪 *${tienda.tiendaNombre}*\n` +
       `🔑 Código: *${codigoTienda}*\n` +
       `🛍️ ${tienda.productos.map(p => `${p.nombre} x${p.cantidad}`).join(', ')}\n` +
-      `💵 ${formatCOP(subtotal)}\n\n`;
+      `💵 $${subtotal.toLocaleString('es-CO')}\n\n`;
 
     // WhatsApp → cada Tienda
     const lista = tienda.productos
-      .map(p => `• ${p.nombre} x${p.cantidad} — ${formatCOP(p.precio * p.cantidad)}`)
+      .map(p => `• ${p.nombre} x${p.cantidad} — $${(p.precio * p.cantidad).toLocaleString('es-CO')}`)
       .join('\n');
 
     await whatsapp.enviarMensaje(FROM, formatWa(tienda.tiendaId),
@@ -238,9 +236,9 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `🛍️ *Productos:*\n${lista}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `💵 Tu subtotal:    ${formatCOP(subtotal)}\n` +
-      `   ├─ Flow (${wompi.COMISION_PCT}%): -${formatCOP(comision)}\n` +
-      `   └─ *Tu ingreso: ${formatCOP(ingresoTienda)}*\n` +
+      `💵 Tu subtotal:    $${subtotal.toLocaleString('es-CO')}\n` +
+      `   ├─ Flow (${wompi.COMISION_PCT}%): -$${comision.toLocaleString('es-CO')}\n` +
+      `   └─ *Tu ingreso: $${ingresoTienda.toLocaleString('es-CO')}*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n` +
       `⚡ Prepara y despacha el pedido. 🌊`
     );
@@ -261,7 +259,7 @@ async function procesarCarritoMultiTienda(pedido, codigoBase, totalCOP, metodo) 
   // Cerrar mensaje cliente y enviar
   msgCliente +=
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `💵 *Total pagado: ${formatCOP(totalCOP)}*\n` +
+    `💵 *Total pagado: $${totalCOP.toLocaleString('es-CO')}*\n` +
     `💳 Método: ${metodoPago}\n\n` +
     `Escribe *seguimiento ${codigoBase}* para rastrear. 🌊`;
 
@@ -312,15 +310,6 @@ function formatMetodoPago(tipo) {
     'EFECTY'               : '💵 Efecty',
   };
   return map[tipo] || tipo || 'Otro';
-}
-
-function formatCOP(number) {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(number);
 }
 
 module.exports = router;
