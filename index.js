@@ -15,8 +15,6 @@ app.use(cors());
 
 // ── Firebase ───────────────────────────────────────────────────────
 // ✅ Seguro
-const serviceAccount = process.env.FIREBASE_CREDENTIALS
-  ? JSON.parse(process.env.FIREBASE_CREDENTIALS.replace(/\\n/g, '\n'))
  const serviceAccount = process.env.FIREBASE_CREDENTIALS
   ? JSON.parse(process.env.FIREBASE_CREDENTIALS.replace(/\\n/g, '\n'))
   : require('./firebase-credentials.json');
