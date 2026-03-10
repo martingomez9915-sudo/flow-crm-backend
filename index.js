@@ -349,3 +349,117 @@ app.post("/admin/negocios/:id/toggle", async (req, res) => {
 });
 
 app.listen(process.env.PORT || 3000, () => console.log("🚀 Flow CRM corriendo en puerto " + (process.env.PORT || 3000)));
+// ══════════════════════════════════════════════════════════════════
+//  CLIENTES
+// ══════════════════════════════════════════════════════════════════
+app.get("/clients", async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.status(400).json({ error: "phone requerido" });
+  try {
+    const snap = await db.collection("negocios").doc(phone).collection("clientes").orderBy("total_compras", "desc").limit(100).get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  ALERTAS
+// ══════════════════════════════════════════════════════════════════
+app.get("/alerts", async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.status(400).json({ error: "phone requerido" });
+  try {
+    const snap = await db.collection("negocios").doc(phone).collection("alertas").where("leida", "==", false).orderBy("fecha", "desc").limit(20).get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/alerts/:id/read", async (req, res) => {
+  const { store_phone } = req.body;
+  try {
+    await db.collection("negocios").doc(store_phone).collection("alertas").doc(req.params.id).update({ leida: true });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  STATS AVANZADAS
+// ══════════════════════════════════════════════════════════════════
+app.get("/stats/advanced", async (req, res) => {
+  const { phone, periodo = "30" } = req.query;
+  if (!phone) return res.status(400).json({ error: "phone requerido" });
+  try {
+    const diasAtras = parseInt(periodo);
+    const fechaInicio = new Date(Date.now() - diasAtras * 24 * 60 * 60 * 1000);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const ayer = new Date(hoy - 24 * 60 * 60 * 1000);
+
+    const snap = await db.collection("negocios").doc(phone).collection("transacciones")
+      .where("tipo", "==", "VENTA").where("fecha", ">=", fechaInicio.toISOString())
+      .orderBy("fecha", "desc").get();
+
+    const transacciones = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const hoyISO = hoy.toISOString();
+    const ayerISO = ayer.toISOString();
+
+    const ventasHoy = transacciones.filter(t => t.fecha >= hoyISO).reduce((a, t) => a + (t.total || 0), 0);
+    const ventasAyer = transacciones.filter(t => t.fecha >= ayerISO && t.fecha < hoyISO).reduce((a, t) => a + (t.total || 0), 0);
+    const pedidosHoy = transacciones.filter(t => t.fecha >= hoyISO).length;
+    const totalPeriodo = transacciones.reduce((a, t) => a + (t.total || 0), 0);
+    const ticketPromedio = transacciones.length > 0 ? Math.round(totalPeriodo / transacciones.length) : 0;
+    const crecimientoHoy = ventasAyer > 0 ? Math.round(((ventasHoy - ventasAyer) / ventasAyer) * 100) : ventasHoy > 0 ? 100 : 0;
+    const pendientes = transacciones.filter(t => t.estado === "PENDIENTE").length;
+    const pagados = transacciones.filter(t => t.estado === "PAGADO" || t.pagado).length;
+    const entregados = transacciones.filter(t => t.estado === "ENTREGADO").length;
+
+    const diasSemana = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+    const ventasPorDia = {};
+    for (let i = Math.min(diasAtras - 1, 29); i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().split("T")[0];
+      ventasPorDia[key] = { fecha: key, dia: i === 0 ? "Hoy" : i === 1 ? "Ayer" : diasSemana[d.getDay()], ventas: 0, pedidos: 0 };
+    }
+    for (const t of transacciones) {
+      const key = t.fecha?.split("T")[0];
+      if (ventasPorDia[key]) { ventasPorDia[key].ventas += t.total || 0; ventasPorDia[key].pedidos += 1; }
+    }
+
+    const porProducto = {};
+    for (const t of transacciones) {
+      const nombre = t.producto || "Sin nombre";
+      if (!porProducto[nombre]) porProducto[nombre] = { nombre, unidades: 0, total: 0, pedidos: 0 };
+      porProducto[nombre].unidades += t.cantidad || 1;
+      porProducto[nombre].total += t.total || 0;
+      porProducto[nombre].pedidos += 1;
+    }
+    const topProductos = Object.values(porProducto).sort((a, b) => b.total - a.total).slice(0, 5);
+
+    const porCanal = {};
+    for (const t of transacciones) {
+      const canal = t.canal || "WHATSAPP";
+      porCanal[canal] = (porCanal[canal] || 0) + (t.total || 0);
+    }
+
+    const invSnap = await db.collection("negocios").doc(phone).collection("inventario").get();
+    const productos = invSnap.docs.map(d => d.data());
+    const stockBajo = productos.filter(p => (p.stock || 0) <= 3 && p.activo !== false);
+
+    const clientesSnap = await db.collection("negocios").doc(phone).collection("clientes").get();
+    const clientes = clientesSnap.docs.map(d => d.data());
+    const clientesNuevosHoy = clientes.filter(c => c.primera_compra >= hoyISO).length;
+    const topClientes = clientes.sort((a, b) => (b.total_compras || 0) - (a.total_compras || 0)).slice(0, 5);
+
+    res.json({
+      ventasHoy, ventasAyer, crecimientoHoy, pedidosHoy, totalPeriodo, ticketPromedio,
+      comisionFlow: Math.round(totalPeriodo * 0.15), netoTienda: Math.round(totalPeriodo * 0.85),
+      pendientes, pagados, entregados,
+      ventasPorDia: Object.values(ventasPorDia), topProductos, porCanal,
+      totalStock: productos.reduce((a, p) => a + (p.stock || 0), 0),
+      numProductos: productos.length, stockBajo,
+      totalClientes: clientes.length, clientesNuevosHoy, topClientes,
+      pedidosRecientes: transacciones.slice(0, 20),
+    });
+  } catch (err) {
+    console.error("Error stats/advanced:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
