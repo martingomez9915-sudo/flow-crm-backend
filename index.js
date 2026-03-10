@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(cors());
 
 // ── Firebase ───────────────────────────────────────────────────────
-const serviceAccount = require('../flow-489116-firebase-adminsdk-fbsvc-e61f2429eb.json');
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 
 initializeApp({ credential: cert(serviceAccount) });
@@ -411,7 +411,7 @@ app.get("/stats/advanced", async (req, res) => {
     const pagados = transacciones.filter(t => t.estado === "PAGADO" || t.pagado).length;
     const entregados = transacciones.filter(t => t.estado === "ENTREGADO").length;
 
-    const diasSemana = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+    const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
     const ventasPorDia = {};
     for (let i = Math.min(diasAtras - 1, 29); i >= 0; i--) {
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
