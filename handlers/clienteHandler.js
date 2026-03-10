@@ -501,12 +501,6 @@ async function manejarTienda(texto, fromNumber, enviar) {
 
 async function mostrarCatalogoTiendaDirecta(tiendaElegida, fromNumber, fromRaw, enviar) {
   setSesion(fromNumber, { tiendaSeleccionada: tiendaElegida, fromRaw });
-  // ── Catálogo Naked ──
-  if (tiendaElegida.nombre && tiendaElegida.nombre.toLowerCase().includes('naked')) {
-    const urlNaked = `${process.env.RAILWAY_URL || 'https://flow-ai-production-4dc2.up.railway.app'}/catalogo_naked_flow_v2.pdf`;
-    await whatsapp.enviarMensaje(process.env.TWILIO_WHATSAPP_NUMBER, fromRaw, ' ', urlNaked);
-    await new Promise(r => setTimeout(r, 500));
-  }
 
   const productos = await db.obtenerInventarioTienda(tiendaElegida.phoneId);
   if (!productos || productos.length === 0)
