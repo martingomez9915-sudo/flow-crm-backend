@@ -799,6 +799,8 @@ async function manejarConfirmacionCarrito(texto, fromNumber, enviar) {
   }
   if (texto !== '1') return await enviar(`⚠️ Presiona *1* para confirmar, *2* para agregar más o *3* para cancelar.`);
 
+  await enviar(`⏳ Procesando tu pedido, un momento...`);
+
   const sesion = getSesion(fromNumber);
   const { nombreCliente, carrito } = sesion;
   const ahora = new Date().toISOString();
